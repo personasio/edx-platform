@@ -1,0 +1,36 @@
+nav.instructor-bar {
+  @include clearfix;
+  @include box-sizing(border-box);
+  margin: 0px auto ($baseline/4);
+  padding: ($baseline*.75);
+  width: 100%;
+  background-color: $gray-l3;
+
+  .inner-wrapper {
+    margin: 0 auto;
+    max-width: 1160px;
+    width: flex-grid(12);
+  }
+
+  .instructor-bar-title {
+    display: inline-block;
+    margin: 0;
+    color: $gray-l6;
+    vertical-align: middle;
+    padding-right: $baseline;
+  }
+
+  .instructor-actions {
+    display: inline-block;
+
+    // UI: Instructor Action
+    .instructor-action {
+      display: inline-block;
+
+      .action-label {
+        margin-right: ($baseline/2);
+        vertical-align: middle;
+      }
+    }
+  }
+}

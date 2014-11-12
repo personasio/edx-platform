@@ -15,7 +15,7 @@ nav.course-material {
   ol.course-tabs {
     @include border-top-radius(4px);
     @include clearfix;
-    padding: 28px 0 10px 0;
+    padding: 10px 0 10px 0;
     @include margin-left(10px);
 
     li {

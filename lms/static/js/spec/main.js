@@ -263,6 +263,10 @@
             },
 
             // Backbone classes loaded explicitly until they are converted to use RequireJS
+            'js/instructor_dashboard/ecommerce': {
+                exports: 'edx.instructor_dashboard.ecommerce.ExpiryCouponView',
+                deps: ['backbone', 'jquery', 'underscore']
+            },
             'js/models/cohort': {
                 exports: 'CohortModel',
                 deps: ['backbone']
@@ -382,6 +386,7 @@
         'lms/include/js/spec/staff_debug_actions_spec.js',
         'lms/include/js/spec/views/notification_spec.js',
         'lms/include/js/spec/dashboard/donation.js',
+        'lms/include/js/spec/instructor_dashboard/ecommerce_spec.js',
         'lms/include/js/spec/student_account/account_spec.js',
         'lms/include/js/spec/student_account/access_spec.js',
         'lms/include/js/spec/student_account/login_spec.js',

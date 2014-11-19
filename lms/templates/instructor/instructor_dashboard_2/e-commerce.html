@@ -1,4 +1,6 @@
 <%! from django.utils.translation import ugettext as _ %>
+<%! from datetime import datetime, timedelta %>
+<%! import pytz %>
 <%page args="section_data"/>
 <%include file="add_coupon_modal.html" args="section_data=section_data" />
 <%include file="edit_coupon_modal.html" args="section_data=section_data" />
@@ -104,6 +106,7 @@
                         <tr class="coupons-headings">
                            <th class="c_code">${_("Code")}</th>
                            <th class="c_dsc">${_("Description")}</th>
+                           <th class="c_expiry">${_("Expiry Date")}</th>
                            <th class="c_discount">${_("Discount (%)")}</th>
                            <th class="c_count">${_("Count")}</th>
                            <th class="c_action">${_("Actions")}</th>
@@ -111,13 +114,25 @@
                      </thead>
                      <tbody>
                         %for coupon in section_data['coupons']:
+                        <% current_date = datetime.now(pytz.UTC) %>
+                        <% coupon_expiry_date = coupon.expiration_date %>
                         %if coupon.is_active == False:
                         <tr class="coupons-items inactive_coupon">
-                           %else:
+                        %elif coupon_expiry_date is not None and current_date >= coupon_expiry_date:
+                        <tr class="coupons-items expired_coupon">
+                        %else:
                         <tr class="coupons-items">
                            %endif
                             <td>${_('{code}').format(code=coupon.code)}</td>
                             <td>${_('{description}').format(description=coupon.description)}</td>
+
+                            <td>
+                              %if coupon.expiration_date:
+                                ${coupon.display_expiry_date}
+                              %else:
+                                ${coupon.expiration_date}
+                              %endif
+                            </td>
                             <td>${_('{discount}').format(discount=coupon.percentage_discount)}</td>
                            <td>
                               ${ coupon.couponredemption_set.all().count() }
@@ -236,6 +251,7 @@
              $('input#edit_coupon_discount').val(data.coupon_discount);
              $('textarea#edit_coupon_description').val(data.coupon_description);
              $('input#edit_coupon_course_id').val(data.coupon_course_id);
+             $('input#edit_coupon_expiration_date').val(data.expiry_date);
              $('#edit-modal-trigger').click();
            },
          error: function(jqXHR, textStatus, errorThrown) {
@@ -471,6 +487,7 @@
        var coupon_discount = $.trim($('#coupon_discount').val());
        var course_id = $.trim($('#coupon_course_id').val());
        var description = $.trim($('#coupon_description').val());
+       var expiration_date = $.trim($('#coupon_expiration_date').val());
 
        // Check if empty of not
        if (code === '') {
@@ -497,7 +514,8 @@
            "code"  : code,
            "discount": coupon_discount,
            "course_id": course_id,
-           "description": description
+           "description": description,
+           "expiration_date": expiration_date
          },
          url: "${section_data['ajax_add_coupon']}",
          success: function (data) {

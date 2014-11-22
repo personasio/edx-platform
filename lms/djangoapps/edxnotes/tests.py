@@ -5,17 +5,19 @@ import json
 from mock import patch, MagicMock
 from unittest import skipUnless
 from datetime import datetime
+from edxmako.shortcuts import render_to_string
 from edxnotes.decorators import edxnotes
 from django.conf import settings
 from django.test import TestCase
 from django.core.urlresolvers import reverse
 from django.core.exceptions import ImproperlyConfigured
 from oauth2_provider.tests.factories import ClientFactory
-
 from xmodule.tabs import EdxNotesTab
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.exceptions import ItemNotFoundError
+from courseware.model_data import FieldDataCache
+from courseware.module_render import get_module_for_descriptor
 from student.tests.factories import UserFactory
 
 from .exceptions import EdxNotesParseError
@@ -65,14 +67,35 @@ class EdxNotesDecoratorTest(TestCase):
         self.client.login(username=self.user.username, password="edx")
         self.problem = TestProblem(self.course)
 
-    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
-    def test_edxnotes_enabled(self):
+    @patch.dict("django.conf.settings.FEATURES", {'ENABLE_EDXNOTES': True})
+    @patch("edxnotes.decorators.get_endpoint")
+    @patch("edxnotes.decorators.get_token")
+    @patch("edxnotes.decorators.generate_uid")
+    def test_edxnotes_enabled(self, mock_generate_uid, mock_get_token, mock_get_endpoint):
         """
         Tests if get_html is wrapped when feature flag is on and edxnotes are
         enabled for the course.
         """
+        mock_generate_uid.return_value = "uid"
+        mock_get_token.return_value = "token"
+        mock_get_endpoint.return_value = "/endpoint"
         enable_edxnotes_for_the_course(self.course, self.user.id)
-        self.assertIn("edx-notes-wrapper", self.problem.get_html())
+        expected_context = {
+            "content": "original_get_html",
+            "uid": "uid",
+            "edxnotes_visibility": "true",
+            "params": {
+                "usageId": u"test_usage_id",
+                "courseId": unicode(self.course.id).encode("utf-8"),
+                "token": "token",
+                "endpoint": "/endpoint",
+                "debug": settings.DEBUG,
+            },
+        }
+        self.assertEqual(
+            self.problem.get_html(),
+            render_to_string("edxnotes_wrapper.html", expected_context),
+        )
 
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
     def test_edxnotes_disabled_if_edxnotes_flag_is_false(self):
@@ -489,6 +512,14 @@ class EdxNotesViewsTest(TestCase):
         self.client.login(username=self.user.username, password="edx")
         self.notes_page_url = reverse("edxnotes", args=[unicode(self.course.id)])
         self.search_url = reverse("search_notes", args=[unicode(self.course.id)])
+        self.visibility_url = reverse("edxnotes_visibility", args=[unicode(self.course.id)])
+
+    def _get_course_module(self):
+        """
+        Returns the course module.
+        """
+        field_data_cache = FieldDataCache([self.course], self.course.id, self.user)
+        return get_module_for_descriptor(self.user, MagicMock(), self.course, field_data_cache, self.course.id)
 
     # pylint: disable=unused-argument
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
@@ -501,7 +532,6 @@ class EdxNotesViewsTest(TestCase):
         response = self.client.get(self.notes_page_url)
         self.assertContains(response, "<h1>Notes</h1>")
 
-    # pylint: disable=unused-argument
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": False})
     def test_edxnotes_view_is_disabled(self):
         """
@@ -567,3 +597,52 @@ class EdxNotesViewsTest(TestCase):
         response = self.client.get(self.search_url, {"text": "test"})
         self.assertEqual(response.status_code, 500)
         self.assertIn("error", response.content)
+
+    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
+    def test_edxnotes_visibility(self):
+        """
+        Can update edxnotes_visibility value successfully.
+        """
+        enable_edxnotes_for_the_course(self.course, self.user.id)
+        response = self.client.post(
+            self.visibility_url,
+            data=json.dumps({"visibility": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        course_module = self._get_course_module()
+        self.assertFalse(course_module.edxnotes_visibility)
+
+    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": False})
+    def test_edxnotes_visibility_if_feature_is_disabled(self):
+        """
+        Tests that 404 response is received if EdxNotes feature is disabled.
+        """
+        response = self.client.post(self.visibility_url)
+        self.assertEqual(response.status_code, 404)
+
+    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
+    def test_edxnotes_visibility_invalid_json(self):
+        """
+        Tests that 400 response is received if invalid JSON is sent.
+        """
+        enable_edxnotes_for_the_course(self.course, self.user.id)
+        response = self.client.post(
+            self.visibility_url,
+            data="string",
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
+    def test_edxnotes_visibility_key_error(self):
+        """
+        Tests that 400 response is received if invalid data structure is sent.
+        """
+        enable_edxnotes_for_the_course(self.course, self.user.id)
+        response = self.client.post(
+            self.visibility_url,
+            data=json.dumps({'test_key': 1}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)

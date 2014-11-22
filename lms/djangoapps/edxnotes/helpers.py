@@ -19,6 +19,7 @@ from dateutil.parser import parse as dateutil_parse
 from provider.oauth2.models import AccessToken, Client
 from provider.utils import now
 from .exceptions import EdxNotesParseError
+
 log = logging.getLogger(__name__)
 
 

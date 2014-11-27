@@ -3,6 +3,7 @@ import datetime
 import decimal
 import pytz
 from django.conf import settings
+from courseware.access import has_access
 from django.contrib.auth.models import Group
 from django.http import (
     HttpResponse, HttpResponseRedirect, HttpResponseNotFound,
@@ -135,16 +136,29 @@ def show_cart(request):
     This view shows cart items.
     """
     cart = Order.get_cart_for_user(request.user)
-    total_cost = cart.total_cost
     cart_items = cart.orderitem_set.all().select_subclasses()
     shoppingcart_items = []
+    expired_course_names = []
+    expired_course_items = []
+    is_course_enrollment_closed = False
     for cart_item in cart_items:
         course_key = getattr(cart_item, 'course_id')
         if course_key:
             course = get_course_by_id(course_key, depth=0)
-            shoppingcart_items.append((cart_item, course))
-
+            can_enroll = has_access(request.user, 'enroll', course)
+            if not can_enroll:
+                expired_course_names.append(course.display_name)
+                expired_course_items.append(cart_item)
+                is_course_enrollment_closed = True
+            else:
+                shoppingcart_items.append((cart_item, course))
+    appended_expired_course_names = ", ".join(expired_course_names)
     site_name = microsite.get_value('SITE_NAME', settings.SITE_NAME)
+
+    if is_course_enrollment_closed:
+        for expired_course_item in expired_course_items:
+            Order.remove_cart_item_from_order(expired_course_item)
+        cart.update_order_type()
 
     callback_url = request.build_absolute_uri(
         reverse("shoppingcart.views.postpay_callback")
@@ -153,7 +167,9 @@ def show_cart(request):
     context = {
         'order': cart,
         'shoppingcart_items': shoppingcart_items,
-        'amount': total_cost,
+        'amount': cart.total_cost,
+        'is_course_enrollment_closed': is_course_enrollment_closed,
+        'appended_expired_course_names': appended_expired_course_names,
         'site_name': site_name,
         'form_html': form_html,
         'currency_symbol': settings.PAID_COURSE_REGISTRATION_CURRENCY[1],
@@ -544,8 +560,7 @@ def billing_details(request):
     """
 
     cart = Order.get_cart_for_user(request.user)
-    cart_items = cart.orderitem_set.all()
-
+    cart_items = cart.orderitem_set.all().select_subclasses()
     if getattr(cart, 'order_type') != OrderTypes.BUSINESS:
         raise Http404('Page not found!')
 
@@ -565,6 +580,15 @@ def billing_details(request):
         }
         return render_to_response("shoppingcart/billing_details.html", context)
     elif request.method == "POST":
+        is_course_enrollment_closed = False
+        # check that if any cart item course enrollment is closed
+        for cart_item in cart_items:
+            course_key = getattr(cart_item, 'course_id')
+            if course_key:
+                course = get_course_by_id(course_key, depth=0)
+                can_enroll = has_access(request.user, 'enroll', course)
+                if not can_enroll:
+                    is_course_enrollment_closed = True
         company_name = request.POST.get("company_name", "")
         company_contact_name = request.POST.get("company_contact_name", "")
         company_contact_email = request.POST.get("company_contact_email", "")
@@ -575,8 +599,35 @@ def billing_details(request):
         cart.add_billing_details(company_name, company_contact_name, company_contact_email, recipient_name,
                                  recipient_email, customer_reference_number)
         return JsonResponse({
-            'response': _('success')
+            'response': _('success'),
+            'is_course_enrollment_closed': is_course_enrollment_closed
         })  # status code 200: OK by default
+
+
+@require_http_methods(["GET"])
+@login_required
+@enforce_shopping_cart_enabled
+def is_course_enrollment_allowed(request):
+    """
+    check that all items in the cart are still valid (course enrollment is not closed)
+    when the user clicks the button to transfer control to CyberSource.
+    """
+    cart = Order.get_cart_for_user(request.user)
+    cart_items = cart.orderitem_set.all().select_subclasses()
+    is_course_enrollment_closed = False
+    for cart_item in cart_items:
+        course_key = getattr(cart_item, 'course_id')
+        if course_key:
+            course = get_course_by_id(course_key, depth=0)
+            can_enroll = has_access(request.user, 'enroll', course)
+            if not can_enroll:
+                is_course_enrollment_closed = True
+
+    return JsonResponse(
+        {
+            'is_course_enrollment_closed': is_course_enrollment_closed
+        }
+    )  # status code 200: OK by default
 
 
 @login_required

@@ -152,6 +152,13 @@ class Order(models.Model):
 
         return False
 
+    @classmethod
+    def remove_cart_item_from_order(cls, item):
+        """
+        Removes the cart item from the cart.
+        """
+        item.delete()
+
     @property
     def total_cost(self):
         """

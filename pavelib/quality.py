@@ -14,6 +14,7 @@ from .utils.envs import Env
     ("system=", "s", "System to act on"),
     ("errors", "e", "Check for errors only"),
     ("limit=", "l", "limit for number of acceptable violations"),
+    ("disable=", "d", "violation codes to disable"),
 ])
 def run_pylint(options):
     """
@@ -24,6 +25,7 @@ def run_pylint(options):
     violations_limit = int(getattr(options, 'limit', -1))
     errors = getattr(options, 'errors', False)
     systems = getattr(options, 'system', 'lms,cms,common').split(',')
+    disable = getattr(options, 'disable', None)
 
     for system in systems:
         # Directory to put the pylint report in.
@@ -33,6 +35,9 @@ def run_pylint(options):
         flags = []
         if errors:
             flags.append("--errors-only")
+
+        if disable:
+            flags.append("--disable={}".format(disable))
 
         apps = [system]
 

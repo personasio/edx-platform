@@ -14,7 +14,7 @@ from .utils.envs import Env
     ("system=", "s", "System to act on"),
     ("errors", "e", "Check for errors only"),
     ("limit=", "l", "limit for number of acceptable violations"),
-    ("disable=", "d", "violation codes to disable"),
+    ("disable=", "d", "violation codes to disable (use '-d W0511' to disable TODO"),
 ])
 def run_pylint(options):
     """

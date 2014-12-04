@@ -2,8 +2,9 @@
 Helper methods related to EdxNotes.
 """
 import json
-import requests
 import logging
+import requests
+from requests.exceptions import RequestException
 from uuid import uuid4
 from json import JSONEncoder
 from datetime import datetime
@@ -18,7 +19,7 @@ from util.date_utils import get_default_time_display
 from dateutil.parser import parse as dateutil_parse
 from provider.oauth2.models import AccessToken, Client
 from provider.utils import now
-from .exceptions import EdxNotesParseError
+from .exceptions import EdxNotesParseError, EdxNotesServiceUnavailable
 log = logging.getLogger(__name__)
 
 
@@ -64,13 +65,16 @@ def send_request(user, course_id, path="", query_string=""):
             "text": query_string,
         })
 
-    response = requests.get(
-        url,
-        headers={
-            "x-annotator-auth-token": get_token(user)
-        },
-        params=params
-    )
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "x-annotator-auth-token": get_token(user)
+            },
+            params=params
+        )
+    except RequestException:
+        raise EdxNotesServiceUnavailable(_("EdxNotes Service is unavailable. Try again in a few minutes."))
 
     return response
 
@@ -111,7 +115,6 @@ def search(user, course, query_string):
     Returns search results for the `query_string(str)`.
     """
     response = send_request(user, course.id, "search", query_string)
-
     try:
         content = json.loads(response.content)
         collection = content["rows"]
@@ -131,7 +134,6 @@ def get_notes(user, course):
     Returns all notes for the user.
     """
     response = send_request(user, course.id, "annotations")
-
     try:
         collection = json.loads(response.content)
     except ValueError:

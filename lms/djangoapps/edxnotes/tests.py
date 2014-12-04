@@ -18,7 +18,7 @@ from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from student.tests.factories import UserFactory
 
-from .exceptions import EdxNotesParseError
+from .exceptions import EdxNotesParseError, EdxNotesServiceUnavailable
 from . import helpers
 
 
@@ -501,12 +501,22 @@ class EdxNotesViewsTest(TestCase):
         response = self.client.get(self.notes_page_url)
         self.assertContains(response, "<h1>Notes</h1>")
 
-    # pylint: disable=unused-argument
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": False})
     def test_edxnotes_view_is_disabled(self):
         """
         Tests that 404 status code is received if EdxNotes feature is disabled.
         """
+        response = self.client.get(self.notes_page_url)
+        self.assertEqual(response.status_code, 404)
+
+    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
+    @patch("edxnotes.views.get_notes")
+    def test_edxnotes_view_404_service_unavailable(self, mock_get_notes):
+        """
+        Tests that 404 status code is received if EdxNotes service is unavailable.
+        """
+        mock_get_notes.side_effect = EdxNotesServiceUnavailable
+        enable_edxnotes_for_the_course(self.course, self.user.id)
         response = self.client.get(self.notes_page_url)
         self.assertEqual(response.status_code, 404)
 
@@ -540,6 +550,18 @@ class EdxNotesViewsTest(TestCase):
         })
         response = self.client.get(self.search_url, {"text": "test"})
         self.assertEqual(response.status_code, 404)
+
+    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
+    @patch("edxnotes.views.search")
+    def test_search_404_service_unavailable(self, mock_search):
+        """
+        Tests that 404 status code is received if EdxNotes service is unavailable.
+        """
+        mock_search.side_effect = EdxNotesServiceUnavailable
+        enable_edxnotes_for_the_course(self.course, self.user.id)
+        response = self.client.get(self.search_url, {"text": "test"})
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("error", response.content)
 
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
     @patch("edxnotes.views.search")

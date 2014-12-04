@@ -18,9 +18,6 @@ urlpatterns = patterns(
     '',
     url(r'^$', system_views.ApiDetail.as_view()),
     url(r'^system$', system_views.SystemDetail.as_view()),
-    url(r'^users/*', include('server_api.users.urls')),
-    url(r'^groups/*', include('server_api.groups.urls')),
-    url(r'^sessions/*', include('server_api.sessions.urls')),
     url(r'^courses/*', include('server_api.courses.urls')),
 )
 

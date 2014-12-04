@@ -2,38 +2,33 @@
 
 from collections import OrderedDict
 import logging
-import itertools
 from lxml import etree
 from StringIO import StringIO
 
-from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Count
-from django.db.models import Q
 from django.http import Http404
-
 from rest_framework import status
 from rest_framework.response import Response
+from lms.lib.comment_client.user import get_course_social_stats
+from lms.lib.comment_client.thread import get_course_thread_stats
+from lms.lib.comment_client.utils import CommentClientRequestError
 
 from courseware.courses import get_course_about_section, get_course_info_section, course_image_url
 from courseware.views import get_static_tab_contents
 from django_comment_common.models import FORUM_ROLE_MODERATOR
 from instructor.access import revoke_access, update_forum_role
-from lms.lib.comment_client.user import get_course_social_stats
-from lms.lib.comment_client.thread import get_course_thread_stats
-from lms.lib.comment_client.utils import CommentClientRequestError
-from student.models import CourseEnrollment, CourseEnrollmentAllowed
+from student.models import CourseEnrollment
 from student.roles import CourseAccessRole, CourseInstructorRole, CourseStaffRole, CourseObserverRole, CourseAssistantRole, UserBasedRole
+from server_api.models import CourseGroupRelationship, GroupProfile
 
-from server_api.models import CourseGroupRelationship, CourseContentGroupRelationship, GroupProfile
-from server_api.users.serializers import UserSerializer, UserCountByCitySerializer
+
 from server_api.util.courseware_access import get_course, get_course_child, get_course_key, \
     course_exists, get_modulestore, get_course_descriptor, get_aggregate_exclusion_user_ids
 from server_api.util.permissions import SecureAPIView, SecureListAPIView
 from server_api.util.utils import generate_base_uri
 
-from .serializers import CourseSerializer
+from serializers import CourseSerializer
 
 
 log = logging.getLogger(__name__)
@@ -174,7 +169,6 @@ def _parse_overview_html(html):
                 "_id.name":"overview"
             }
     """
-    result = {}
 
     parser = etree.HTMLParser()
     tree = etree.parse(StringIO(html), parser)
@@ -245,7 +239,6 @@ def _parse_updates_html(html):
                 "_id.name":"updates"
             }
     """
-    result = {}
 
     parser = etree.HTMLParser()
     tree = etree.parse(StringIO(html), parser)
@@ -340,15 +333,11 @@ def _get_course_data(request, course_key, course_descriptor, depth=0):
     data['resources'] = []
     resource_uri = '{}/content/'.format(base_uri_without_qs)
     data['resources'].append({'uri': resource_uri})
-    resource_uri = '{}/groups/'.format(base_uri_without_qs)
-    data['resources'].append({'uri': resource_uri})
     resource_uri = '{}/overview/'.format(base_uri_without_qs)
     data['resources'].append({'uri': resource_uri})
     resource_uri = '{}/updates/'.format(base_uri_without_qs)
     data['resources'].append({'uri': resource_uri})
     resource_uri = '{}/static_tabs/'.format(base_uri_without_qs)
-    data['resources'].append({'uri': resource_uri})
-    resource_uri = '{}/users/'.format(base_uri_without_qs)
     data['resources'].append({'uri': resource_uri})
     return data
 
@@ -955,358 +944,6 @@ class CoursesStaticTabsDetail(SecureAPIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-class CoursesUsersList(SecureAPIView):
-    """
-    **Use Case**
-
-        CoursesUsersList returns a collection of users enrolled or pre-enrolled
-        in the course.
-
-        You also use CoursesUsersList to enroll a new user in the course.
-
-    **Example Requests**
-
-          GET /api/courses/{course_id}/users
-
-          POST /api/courses/{course_id}/users
-
-    **GET Response Values**
-
-        * enrollments: The collection of users in the course. Each object in the
-          collection conains the following keys:
-
-          * id: The ID of the user.
-
-          * email: The email address of the user.
-
-          * username: The username of the user.
-
-        * GET supports filtering of user by organization(s), groups
-         * To get users enrolled in a course and are also member of organization
-         ```/api/courses/{course_id}/users?organizations={organization_id}```
-         * organizations filter can be a single id or multiple ids separated by comma
-         ```/api/courses/{course_id}/users?organizations={organization_id1},{organization_id2}```
-         * To get users enrolled in a course and also member of specific groups
-         ```/api/courses/{course_id}/users?groups={group_id1},{group_id2}```
-        * GET supports exclude filtering of user by groups
-         * To get users enrolled in a course and also not member of specific groups
-         ```/api/courses/{course_id}/users?exclude_groups={group_id1},{group_id2}```
-
-
-    **Post Values**
-
-        To create a new user through POST /api/courses/{course_id}/users, you
-        must include either a user_id or email key in the JSON object.
-    """
-
-    def post(self, request, course_id):
-        """
-        POST /api/courses/{course_id}/users
-        """
-        if not course_exists(course_id):
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        course_key = get_course_key(course_id)
-        if 'user_id' in request.DATA:
-            user_id = request.DATA['user_id']
-            try:
-                existing_user = User.objects.get(id=user_id)
-            except ObjectDoesNotExist:
-                return Response({}, status=status.HTTP_404_NOT_FOUND)
-            CourseEnrollment.enroll(existing_user, course_key)
-            return Response({}, status=status.HTTP_201_CREATED)
-        elif 'email' in request.DATA:
-            try:
-                email = request.DATA['email']
-                existing_user = User.objects.get(email=email)
-            except ObjectDoesNotExist:
-                if request.DATA.get('allow_pending'):
-                    # If the email doesn't exist we assume the student does not exist
-                    # and the instructor is pre-enrolling them
-                    # Store the pre-enrollment data in the CourseEnrollmentAllowed table
-                    # NOTE: This logic really should live in CourseEnrollment.....
-                    cea, created = CourseEnrollmentAllowed.objects.get_or_create(course_id=course_key, email=email)  # pylint: disable=W0612
-                    cea.auto_enroll = True
-                    cea.save()
-                    return Response({}, status.HTTP_201_CREATED)
-                else:
-                    return Response({}, status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response({}, status=status.HTTP_400_BAD_REQUEST)
-
-    def get(self, request, course_id):
-        """
-        GET /api/courses/{course_id}/users
-        """
-
-        groups = request.QUERY_PARAMS.get('groups', None)
-        exclude_groups = request.QUERY_PARAMS.get('exclude_groups', None)
-        response_data = OrderedDict()
-        base_uri = generate_base_uri(request)
-        response_data['uri'] = base_uri
-        if not course_exists(course_id):
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        course_key = get_course_key(course_id)
-        # Get a list of all enrolled students
-        users = CourseEnrollment.users_enrolled_in(course_key)
-        upper_bound = getattr(settings, 'API_LOOKUP_UPPER_BOUND', 100)
-        if exclude_groups:
-            exclude_groups = exclude_groups.split(",")[:upper_bound]
-            users = users.exclude(groups__in=exclude_groups)
-        if groups:
-            groups = groups.split(",")[:upper_bound]
-            users = users.filter(groups__in=groups)
-
-        response_data['enrollments'] = []
-        for user in users:
-            user_data = OrderedDict()
-            user_data['id'] = user.id
-            user_data['email'] = user.email
-            user_data['username'] = user.username
-            response_data['enrollments'].append(user_data)
-
-        # Then list all enrollments which are pending. These are enrollments for students that have not yet
-        # created an account
-        pending_enrollments = CourseEnrollmentAllowed.objects.filter(course_id=course_key)
-        if pending_enrollments:
-            response_data['pending_enrollments'] = []
-            for cea in pending_enrollments:
-                response_data['pending_enrollments'].append(cea.email)
-        return Response(response_data)
-
-
-class CoursesUsersDetail(SecureAPIView):
-    """
-    **Use Case**
-
-        CoursesUsersDetail returns a details about a specified user of a course.
-
-        You also use CoursesUsersDetail to unenroll a user from the course.
-
-    **Example Requests**
-
-          GET /api/courses/{course_id}/users/{user_id}
-
-          DELETE /api/courses/{course_id}/users/{user_id}
-
-    **GET Response Values**
-
-        * course_id: The ID of the course the user is enrolled in.
-
-        * position: The last known position in the course. (??? in outline?)
-
-        * user_id: The ID of the user.
-
-        * uri: The URI to use to get details of the user.
-    """
-    def get(self, request, course_id, user_id):
-        """
-        GET /api/courses/{course_id}/users/{user_id}
-        """
-        base_uri = generate_base_uri(request)
-        response_data = {
-            'course_id': course_id,
-            'user_id': user_id,
-            'uri': base_uri,
-        }
-        try:
-            user = User.objects.get(id=user_id, is_active=True)
-        except ObjectDoesNotExist:
-            return Response(response_data, status=status.HTTP_404_NOT_FOUND)
-        course_descriptor, course_key, course_content = get_course(request, user, course_id, load_content=True)
-        if not course_descriptor:
-            return Response(response_data, status=status.HTTP_404_NOT_FOUND)
-        if CourseEnrollment.is_enrolled(user, course_key):
-            response_data['position'] = course_content.position
-            response_status = status.HTTP_200_OK
-        else:
-            response_status = status.HTTP_404_NOT_FOUND
-        return Response(response_data, status=response_status)
-
-    def delete(self, request, course_id, user_id):
-        """
-        DELETE /api/courses/{course_id}/users/{user_id}
-        """
-        try:
-            user = User.objects.get(id=user_id)
-        except ObjectDoesNotExist:
-            return Response({}, status=status.HTTP_204_NO_CONTENT)
-        if not course_exists(course_id):
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        course_key = get_course_key(course_id)
-        CourseEnrollment.unenroll(user, course_key)
-        response_data = {}
-        base_uri = generate_base_uri(request)
-        response_data['uri'] = base_uri
-        return Response(response_data, status=status.HTTP_204_NO_CONTENT)
-
-
-class CourseContentGroupsList(SecureAPIView):
-    """
-    ### The CourseContentGroupsList view allows clients to retrieve a list of Content-Group relationships
-    - URI: ```/api/courses/{course_id}/content/{content_id}/groups```
-    - GET: Returns a JSON representation (array) of the set of Content-Group relationships
-        * type: Set filtering parameter
-    - POST: Creates a new CourseContentGroupRelationship entity using the provided Content and Group
-        * group_id: __required__, The identifier for the Group being related to the Content
-    - POST Example:
-
-            {
-                "group_id" : 12345
-            }
-    ### Use Cases/Notes:
-    * Example: Link a specific piece of course content to a group, such as a student workgroup
-    * Note: The specified Group must have a corresponding GroupProfile record for this operation to succeed
-    * Providing a 'type' parameter will attempt to filter the related Group set by the specified value
-    """
-
-    def post(self, request, course_id, content_id):
-        """
-        POST /api/courses/{course_id}/content/{content_id}/groups
-        """
-        if not course_exists(course_id):
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        course_key = get_course_key(course_id)
-        content_descriptor, content_key, existing_content = get_course_child(request, request.user, course_key, content_id)  # pylint: disable=W0612
-        if not content_descriptor:
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        group_id = request.DATA.get('group_id')
-        if group_id is None:
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        try:
-            existing_profile = GroupProfile.objects.get(group_id=group_id)
-        except ObjectDoesNotExist:
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        response_data = {}
-        base_uri = generate_base_uri(request)
-        response_data['uri'] = '{}/{}'.format(base_uri, existing_profile.group_id)
-        response_data['course_id'] = unicode(course_key)
-        response_data['content_id'] = unicode(content_key)
-        response_data['group_id'] = str(existing_profile.group_id)
-        try:
-            CourseContentGroupRelationship.objects.get(
-                course_id=course_key,
-                content_id=content_key,
-                group_profile=existing_profile
-            )
-            response_data['message'] = "Relationship already exists."
-            return Response(response_data, status=status.HTTP_409_CONFLICT)
-        except ObjectDoesNotExist:
-            CourseContentGroupRelationship.objects.create(
-                course_id=course_key,
-                content_id=content_key,
-                group_profile=existing_profile
-            )
-            return Response(response_data, status=status.HTTP_201_CREATED)
-
-    def get(self, request, course_id, content_id):
-        """
-        GET /api/courses/{course_id}/content/{content_id}/groups?type=workgroup
-        """
-        response_data = []
-        group_type = request.QUERY_PARAMS.get('type')
-        if not course_exists(course_id):
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        course_key = get_course_key(course_id)
-        content_descriptor, content_key, existing_content = get_course_child(request, request.user, course_key, content_id)  # pylint: disable=W0612
-        if not content_descriptor:
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        relationships = CourseContentGroupRelationship.objects.filter(
-            course_id=course_key,
-            content_id=content_key,
-        ).select_related("groupprofile")
-        if group_type:
-            relationships = relationships.filter(group_profile__group_type=group_type)
-        response_data = [
-            {'course_id': course_id, 'content_id': content_id, 'group_id': relationship.group_profile.group_id}
-            for relationship in relationships
-        ]
-        return Response(response_data, status=status.HTTP_200_OK)
-
-
-class CourseContentGroupsDetail(SecureAPIView):
-    """
-    ### The CourseContentGroupsDetail view allows clients to interact with a specific Content-Group relationship
-    - URI: ```/api/courses/{course_id}/content/{content_id}/groups/{group_id}```
-    - GET: Returns a JSON representation of the specified Content-Group relationship
-    ### Use Cases/Notes:
-    * Use the GET operation to verify the existence of a particular Content-Group relationship
-    * If the User is enrolled in the course, we provide their last-known position to the client
-    """
-    def get(self, request, course_id, content_id, group_id):
-        """
-        GET /api/courses/{course_id}/content/{content_id}/groups/{group_id}
-        """
-        if not course_exists(course_id):
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        course_key = get_course_key(course_id)
-        content_descriptor, content_key, existing_content = get_course_child(request, request.user, course_key, content_id)  # pylint: disable=W0612
-        if not content_descriptor:
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        try:
-            CourseContentGroupRelationship.objects.get(
-                course_id=course_key,
-                content_id=content_key,
-                group_profile__group_id=group_id
-            )
-        except ObjectDoesNotExist:
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        response_data = {
-            'course_id': course_id,
-            'content_id': content_id,
-            'group_id': group_id,
-        }
-        return Response(response_data, status=status.HTTP_200_OK)
-
-
-class CourseContentUsersList(SecureAPIView):
-    """
-    ### The CourseContentUsersList view allows clients to users enrolled and
-    users not enrolled for course within all groups of course
-    - URI: ```/api/courses/{course_id}/content/{content_id}/users
-        * enrolled: boolean, filters user set by enrollment status
-        * group_id: numeric, filters user set by membership in a specific group
-        * type: string, filters user set by membership in groups matching the specified type
-    - GET: Returns a JSON representation of users enrolled or not enrolled
-    ### Use Cases/Notes:
-    * Filtering related Users by enrollement status should be self-explanatory
-    * An example of specific group filtering is to get the set of users who are members of a particular workgroup related to the content
-    * An example of group type filtering is to get all users who are members of an organization group related to the content
-    """
-
-    def get(self, request, course_id, content_id):
-        """
-        GET /api/courses/{course_id}/content/{content_id}/users
-        """
-        if not course_exists(course_id):
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        course_key = get_course_key(course_id)
-        content_descriptor, content_key, existing_content = get_course_child(request, request.user, course_key, content_id)  # pylint: disable=W0612
-        if not content_descriptor:
-            return Response({}, status=status.HTTP_404_NOT_FOUND)
-        enrolled = self.request.QUERY_PARAMS.get('enrolled', 'True')
-        group_type = self.request.QUERY_PARAMS.get('type', None)
-        group_id = self.request.QUERY_PARAMS.get('group_id', None)
-        relationships = CourseContentGroupRelationship.objects.filter(
-            course_id=course_key, content_id=content_key).select_related("groupprofile")
-
-        if group_id:
-            relationships = relationships.filter(group_profile__group__id=group_id)
-
-        if group_type:
-            relationships = relationships.filter(group_profile__group_type=group_type)
-
-        lookup_group_ids = relationships.values_list('group_profile', flat=True)
-        users = User.objects.filter(groups__id__in=lookup_group_ids)
-        enrolled_users = CourseEnrollment.users_enrolled_in(course_key).filter(groups__id__in=lookup_group_ids)
-        if enrolled in ['True', 'true']:
-            queryset = enrolled_users
-        else:
-            queryset = list(itertools.ifilterfalse(lambda x: x in enrolled_users, users))
-
-        serializer = UserSerializer(queryset, many=True)
-        return Response(serializer.data)  # pylint: disable=E1101
-
-
 class CoursesMetrics(SecureAPIView):
     """
     ### The CoursesMetrics view allows clients to retrieve a list of Metrics for the specified Course
@@ -1389,38 +1026,6 @@ class CoursesMetricsSocial(SecureListAPIView):
         return Response(data, http_status)
 
 
-class CoursesMetricsCities(SecureListAPIView):
-    """
-    ### The CoursesMetricsCities view allows clients to retrieve ordered list of user
-    count by city in a particular course
-    - URI: ```/api/courses/{course_id}/metrics/cities/```
-    - GET: Provides paginated list of user count by cities
-    list can be filtered by city
-    GET ```/api/courses/{course_id}/metrics/cities/?city={city1},{city2}```
-    """
-
-    serializer_class = UserCountByCitySerializer
-
-    def get_queryset(self):
-        course_id = self.kwargs['course_id']
-        city = self.request.QUERY_PARAMS.get('city', None)
-        upper_bound = getattr(settings, 'API_LOOKUP_UPPER_BOUND', 100)
-        if not course_exists(course_id):
-            raise Http404
-        course_key = get_course_key(course_id)
-        exclude_users = get_aggregate_exclusion_user_ids(course_key)
-        queryset = CourseEnrollment.users_enrolled_in(course_key).exclude(id__in=exclude_users)
-        if city:
-            city = city.split(',')[:upper_bound]
-            q_list = [Q(profile__city__iexact=item.strip()) for item in city]
-            q_list = reduce(lambda a, b: a | b, q_list)
-            queryset = queryset.filter(q_list)
-
-        queryset = queryset.values('profile__city').annotate(count=Count('profile__city'))\
-            .filter(count__gt=0).order_by('-count')
-        return queryset
-
-
 class CoursesRolesList(SecureAPIView):
     """
     ### The CoursesRolesList view allows clients to interact with the Course's roleset
@@ -1499,11 +1104,11 @@ class CoursesRolesUsersDetail(SecureAPIView):
     ### Use Cases/Notes:
     * Use the DELETE operation to revoke a particular role for the specified user
     """
-    def delete(self, request, course_id, role, user_id):  # pylint: disable=W0613
+    def delete(self, request, course_id, role, user_id):  # pylint: disable=unused-argument
         """
         DELETE /api/courses/{course_id}/roles/{role}/users/{user_id}
         """
-        course_descriptor, course_key, course_content = get_course(self.request, self.request.user, course_id)  # pylint: disable=W0612
+        course_descriptor, course_key, course_content = get_course(self.request, self.request.user, course_id)
         if not course_descriptor:
             return Response({}, status=status.HTTP_404_NOT_FOUND)
 

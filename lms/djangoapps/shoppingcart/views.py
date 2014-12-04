@@ -3,7 +3,6 @@ import datetime
 import decimal
 import pytz
 from django.conf import settings
-from courseware.access import has_access
 from django.contrib.auth.models import Group
 from django.http import (
     HttpResponse, HttpResponseRedirect, HttpResponseNotFound,
@@ -145,7 +144,7 @@ def show_cart(request):
         course_key = getattr(cart_item, 'course_id')
         if course_key:
             course = get_course_by_id(course_key, depth=0)
-            if CourseEnrollment.enrollment_is_closed(request.user, course):
+            if CourseEnrollment.is_enrollment_closed(request.user, course):
                 expired_course_names.append(course.display_name)
                 expired_course_items.append(cart_item)
                 is_course_enrollment_closed = True
@@ -585,9 +584,7 @@ def billing_details(request):
             course_key = getattr(cart_item, 'course_id')
             if course_key:
                 course = get_course_by_id(course_key, depth=0)
-                can_enroll = has_access(request.user, 'enroll', course)
-                if not can_enroll:
-                    is_course_enrollment_closed = True
+                is_course_enrollment_closed = CourseEnrollment.is_enrollment_closed(request.user, course)
         company_name = request.POST.get("company_name", "")
         company_contact_name = request.POST.get("company_contact_name", "")
         company_contact_email = request.POST.get("company_contact_email", "")
@@ -618,8 +615,7 @@ def is_course_enrollment_allowed(request):
         course_key = getattr(cart_item, 'course_id')
         if course_key:
             course = get_course_by_id(course_key, depth=0)
-            can_enroll = has_access(request.user, 'enroll', course)
-            if not can_enroll:
+            if CourseEnrollment.is_enrollment_closed(request.user, course):
                 is_course_enrollment_closed = True
 
     return JsonResponse(

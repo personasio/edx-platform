@@ -770,6 +770,11 @@ class CourseEnrollment(models.Model):
         return enrollment_number
 
     @classmethod
+    def is_enrollment_closed(cls, user, course):
+        from courseware.access import has_access
+        return not has_access(user, 'enroll', course)
+
+    @classmethod
     def is_course_full(cls, course):
         """
         Returns a boolean value regarding whether a course has already reached it's max enrollment
@@ -871,11 +876,6 @@ class CourseEnrollment(models.Model):
                 log.exception('Unable to emit event %s for user %s and course %s', event_name, self.user.username, self.course_id)
 
     @classmethod
-    def enrollment_is_closed(cls, user, course):
-        from courseware.access import has_access
-        return not has_access(user, 'enroll', course)
-
-    @classmethod
     def enroll(cls, user, course_key, mode="honor", check_access=False):
         """
         Enroll a user in a course. This saves immediately.
@@ -924,7 +924,7 @@ class CourseEnrollment(models.Model):
         if check_access:
             if course is None:
                 raise NonExistentCourseError
-            if CourseEnrollment.enrollment_is_closed(user, course):
+            if CourseEnrollment.is_enrollment_closed(user, course):
                 log.warning(
                     "User {0} failed to enroll in course {1} because enrollment is closed".format(
                         user.username,

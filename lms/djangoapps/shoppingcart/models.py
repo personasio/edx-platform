@@ -62,6 +62,16 @@ ORDER_STATUSES = (
 
     # The user's order has been refunded.
     ('refunded', 'refunded'),
+
+    # The user's order went through, but the order was erroneously left
+    # in 'cart'. This state can only be arrived at through manual database
+    # intervention.
+    ('defunct-cart', 'defunct-cart'),
+
+    # The user's order went through, but the order was erroneously left
+    # in 'paying'. This state can only be arrived at through manual database
+    # intervention.
+    ('defunct-paying', 'defunct-paying'),
 )
 
 # we need a tuple to represent the primary key of various OrderItem subclasses

@@ -204,7 +204,7 @@
             if (!this.fileUploaderView) {
                 this.fileUploaderView = new FileUploaderView({
                     el: uploadElement,
-                    title: gettext("Assign Students to Cohort Groups by Uploading a CSV File"),
+                    title: gettext("Assign students to cohort groups by uploading a CSV file."),
                     inputLabel: gettext("Choose a .csv file"),
                     inputTip: gettext("Only properly formatted .csv files will be accepted."),
                     submitButtonText: gettext("Upload File and Assign Students"),

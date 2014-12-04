@@ -4,7 +4,7 @@
 </h2>
 
 <div class="cohort-management-nav">
-    <h3 class="subsection-title"><%- gettext('Manually Assign Students to Cohort Groups') %></h3>
+    <h3 class="subsection-title"><%- gettext('Assign students to cohort groups manually') %></h3>
     <form action="" method="post" name="" id="cohort-management-nav-form" class="cohort-management-nav-form">
 
         <div class="cohort-management-nav-form-select field field-select">
@@ -31,7 +31,7 @@
 
     <hr class="divider divider-lv1" />
 
-    <a class="toggle-cohort-management-secondary" href="#cohort-management-file-upload"><%- gettext('Assign Students to Cohort Groups by Uploading a CSV File') %></a>
+    <a class="toggle-cohort-management-secondary" href="#cohort-management-file-upload"><%- gettext('Assign students to cohort groups by uploading a CSV file') %></a>
 
     <div class="cohort-management-file-upload csv-upload is-hidden" id="cohort-management-file-upload"></div>
 

@@ -49,7 +49,7 @@
             var selectedCohort = this.lastSelectedCohortId && this.model.get(this.lastSelectedCohortId),
                 hasCohorts = this.model.length > 0,
                 cohortNavElement = this.$('.cohort-management-nav'),
-                additionalCohortControlElement = this.$('.additional-cohort-controls');
+                additionalCohortControlElement = this.$('.wrapper-cohort-supplemental');
             this.hideAddCohortForm();
             if (hasCohorts) {
                 cohortNavElement.removeClass(hiddenClass);

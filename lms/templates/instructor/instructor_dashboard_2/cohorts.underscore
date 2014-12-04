@@ -27,8 +27,7 @@
 <!-- individual group -->
 <div class="cohort-management-group"></div>
 
-
-<div class="additional-cohort-controls">
+<div class="wrapper-cohort-supplemental">
 
     <hr class="divider divider-lv1" />
 

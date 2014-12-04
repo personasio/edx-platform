@@ -7,11 +7,9 @@ define ["js/models/settings/course_grader"], (CourseGrader) ->
                 expect(model.get('min_count')).toBe(3)
                 expect(model.get('drop_count')).toBe(1)
 
-            it "converts weights to an integer with rounding", ->
-                model = new CourseGrader({weight:  28.999999999999996, min_count: 3.67, drop_count: 1.88}, {parse:true})
+            it "converts float value of weight to an integer with rounding", ->
+                model = new CourseGrader({weight:  28.999999999999996}, {parse:true})
                 expect(model.get('weight')).toBe(29)
-                expect(model.get('min_count')).toBe(3)
-                expect(model.get('drop_count')).toBe(1)
 
             it "converts a string to an integer", ->
                 model = new CourseGrader({weight: '7.0001', min_count: '3.67', drop_count: '1.88'}, {parse:true})

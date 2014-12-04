@@ -74,7 +74,7 @@ def send_request(user, course_id, path="", query_string=""):
             params=params
         )
     except RequestException:
-        raise EdxNotesServiceUnavailable(_("EdxNotes Service is unavailable. Try again in a few minutes."))
+        raise EdxNotesServiceUnavailable(_("EdxNotes Service is unavailable. Please try again in a few minutes."))
 
     return response
 
@@ -120,7 +120,7 @@ def search(user, course, query_string):
         collection = content["rows"]
     except (ValueError, KeyError):
         log.warning("invalid JSON: %s", response.content)
-        raise EdxNotesParseError(_("Server error. Try again in a few minutes."))
+        raise EdxNotesParseError(_("Server error. Please try again in a few minutes."))
 
     content.update({
         "rows": preprocess_collection(user, course, collection)

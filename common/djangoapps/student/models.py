@@ -871,6 +871,11 @@ class CourseEnrollment(models.Model):
                 log.exception('Unable to emit event %s for user %s and course %s', event_name, self.user.username, self.course_id)
 
     @classmethod
+    def enrollment_is_closed(cls, user, course):
+        from courseware.access import has_access
+        return not has_access(user, 'enroll', course)
+
+    @classmethod
     def enroll(cls, user, course_key, mode="honor", check_access=False):
         """
         Enroll a user in a course. This saves immediately.
@@ -904,8 +909,6 @@ class CourseEnrollment(models.Model):
 
         Also emits relevant events for analytics purposes.
         """
-        from courseware.access import has_access
-
         # All the server-side checks for whether a user is allowed to enroll.
         try:
             course = modulestore().get_course(course_key)
@@ -921,7 +924,7 @@ class CourseEnrollment(models.Model):
         if check_access:
             if course is None:
                 raise NonExistentCourseError
-            if not has_access(user, 'enroll', course):
+            if CourseEnrollment.enrollment_is_closed(user, course):
                 log.warning(
                     "User {0} failed to enroll in course {1} because enrollment is closed".format(
                         user.username,

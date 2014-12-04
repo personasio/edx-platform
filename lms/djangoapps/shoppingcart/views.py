@@ -145,8 +145,7 @@ def show_cart(request):
         course_key = getattr(cart_item, 'course_id')
         if course_key:
             course = get_course_by_id(course_key, depth=0)
-            can_enroll = has_access(request.user, 'enroll', course)
-            if not can_enroll:
+            if CourseEnrollment.enrollment_is_closed(request.user, course):
                 expired_course_names.append(course.display_name)
                 expired_course_items.append(cart_item)
                 is_course_enrollment_closed = True

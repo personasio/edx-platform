@@ -101,10 +101,12 @@ from . import provider
 # `AUTH_ENROLL_COURSE_ID_KEY` provides the course ID that a student
 # is trying to enroll in, used to generate analytics events
 # and auto-enroll students.
+from user_api.api import profile
 
 AUTH_ENTRY_KEY = 'auth_entry'
 AUTH_REDIRECT_KEY = 'next'
 AUTH_ENROLL_COURSE_ID_KEY = 'enroll_course_id'
+AUTH_EMAIL_OPT_IN_KEY = 'email_opt_in'
 
 AUTH_ENTRY_DASHBOARD = 'dashboard'
 AUTH_ENTRY_LOGIN = 'login'
@@ -639,6 +641,10 @@ def change_enrollment(strategy, user=None, *args, **kwargs):
     if enroll_course_id:
         course_id = CourseKey.from_string(enroll_course_id)
         modes = CourseMode.modes_for_course_dict(course_id)
+        # If the email opt in parameter is found, set the preference.
+        email_opt_in = strategy.session_get(AUTH_EMAIL_OPT_IN_KEY)
+        if email_opt_in:
+            profile.update_email_opt_in(user.username, course_id.org, email_opt_in)
         if CourseMode.can_auto_enroll(course_id, modes_dict=modes):
             try:
                 CourseEnrollment.enroll(user, course_id, check_access=True)

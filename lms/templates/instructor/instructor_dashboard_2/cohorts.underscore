@@ -27,9 +27,12 @@
 <!-- individual group -->
 <div class="cohort-management-group"></div>
 
-<div class="cohort-management-file-upload csv-upload"></div>
-
 <hr class="divider divider-lv1" />
+
+<a class="toggle-cohort-management-secondary" href="#cohort-management-file-upload">or assign students to cohort groups by uploading a CSV file</a>
+
+<div class="cohort-management-file-upload csv-upload is-hidden" id="cohort-management-file-upload"></div>
+
 
 <div class="cohort-management-supplemental">
     <p class="">

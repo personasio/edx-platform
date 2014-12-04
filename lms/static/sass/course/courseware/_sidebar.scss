@@ -206,11 +206,11 @@
         &.graded {
          > a {
            > img {
-             margin: 0;
+             margin: auto;
              position: absolute;
+             top: 0;
+             bottom: 0;
              right: 7px;
-             top: 50%;
-             transform: translate(0px, -50%);
            }
           }
 

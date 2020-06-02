@@ -7,3 +7,5 @@ sphinxcontrib-napoleon==0.2.6
 stevedore==0.14.1
 djangorestframework==2.3.14
 PyYAML>=3.10
+
+sphinx>=3.0.4 # not directly required, pinned by Snyk to avoid a vulnerability

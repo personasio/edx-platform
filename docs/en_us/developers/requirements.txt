@@ -5,3 +5,4 @@ pytz
 lxml
 sphinxcontrib-napoleon==0.2.6
 stevedore==0.14.1
+pygments>=2.7.4 # not directly required, pinned by Snyk to avoid a vulnerability

@@ -9,5 +9,5 @@ gem 'dalli', '~> 2.6.4'
 # These gems aren't actually required; they are used by Linux and Mac to
 # detect when files change. If these gems are not installed, the system
 # will fall back to polling files.
-gem 'rb-inotify', '~> 0.9'
+gem 'rb-inotify', '~> 0.9', '>= 0.9.3'
 gem 'rb-fsevent', '~> 0.9.3'

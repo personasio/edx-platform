@@ -58,7 +58,7 @@ Shapely==1.2.16
 sorl-thumbnail==11.12
 South==0.7.6
 sympy==0.7.1
-xmltodict==0.4.1
+xmltodict==0.15.0
 
 # Metrics gathering and monitoring
 dogapi==1.2.1
